@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold">Available Jobs</h2>
+        <span class="text-muted">
+            {{ jobs|length }} Jobs Found
+        </span>
+    </div>
+
+    {% if jobs %}
+
+        {% for job in jobs %}
+        <div class="card mb-4 border-0 shadow-sm rounded-4 job-card">
+            <div class="card-body p-4 d-flex flex-column justify-content-between">
+
+                <!-- TOP SECTION -->
+                <div>
+
+                    <!-- Title + Category -->
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h4 class="fw-bold mb-2">{{ job.title }}</h4>
+
+                        <!-- Category Top Right -->
+                        <span class="badge bg-dark px-3 py-2">
+                            {{ job.category }}
+                        </span>
+                    </div>
+
+                    <!-- Company + Location + Salary -->
+                    <p class="text-muted mb-3">
+                        🏢 Tech Company Ltd • 
+                        📍 {{ job.location }} • 
+                        💰 {{ job.salary }}
+                    </p>
+
+                    <hr>
+
+                    <!-- Description -->
+                    <p class="text-muted mb-4">
+                        {{ job.description[:200] }}{% if job.description|length > 200 %}...{% endif %}
+                    </p>
+
+                </div>
+
+                <!-- BOTTOM SECTION -->
+                <div class="d-flex justify-content-end">
+
+                    {% if current_user.is_authenticated and current_user.role == "job_seeker" %}
+                        
+                        {% set applied = false %}
+                        {% for application in job.applications %}
+                            {% if application.user_id == current_user.id %}
+                                {% set applied = true %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if applied %}
+                            <button class="btn btn-outline-success px-4" disabled>
+                                ✅ Applied
+                            </button>
+                        {% else %}
+                            <a href="{{ url_for('apply', job_id=job.id) }}" 
+                               class="btn btn-primary px-4">
+                                 Apply Now
+                            </a>
+                        {% endif %}
+
+                    {% else %}
+                        <a href="{{ url_for('login') }}" 
+                           class="btn btn-outline-primary px-4">
+                            Apply
+                        </a>
+                    {% endif %}
+
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+
+    {% else %}
+
+        <!-- No Jobs Section -->
+        <div class="alert alert-info text-center p-5 rounded-4">
+            <h5 class="fw-bold">No jobs available yet.</h5>
+            <p class="mb-0">Please check back later.</p>
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

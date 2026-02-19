@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-5">
+
+    <h3 class="mb-4">Applications for {{ job.title }}</h3>
+
+    {% if applications %}
+        {% for app in applications %}
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body d-flex justify-content-between align-items-center">
+
+                <div>
+                    <h5>{{ app.applicant.username }}</h5>
+                    <small class="text-muted">
+                        Applied on {{ app.applied_at.strftime('%d %b %Y') }}
+                    </small>
+                    <br>
+                    <span class="badge 
+                        {% if app.status == 'Pending' %}bg-warning
+                        {% elif app.status == 'Selected' %}bg-success
+                        {% else %}bg-danger{% endif %}">
+                        {{ app.status }}
+                    </span>
+                </div>
+
+                {% if app.status == "Pending" %}
+                <div>
+                    <a href="{{ url_for('update_application', app_id=app.id, status='Selected') }}"
+                       class="btn btn-success btn-sm">
+                       Select
+                    </a>
+
+                    <a href="{{ url_for('update_application', app_id=app.id, status='Rejected') }}"
+                       class="btn btn-danger btn-sm">
+                       Reject
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">
+            No applications yet.
+        </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
