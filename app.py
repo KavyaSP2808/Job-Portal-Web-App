@@ -73,8 +73,8 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and check_password_hash(user.password, form.password.data):
             login_user(user)
-            next_page = request.args.get('next')
             
+            next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
         else:
             flash("Invalid credentials")
