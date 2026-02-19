@@ -2,11 +2,18 @@ from flask import Flask, render_template, redirect, url_for, request, flash
 from models import db, User, Job, Application
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from forms import RegisterForm, JobForm
+from forms import RegisterForm, JobForm, LoginForm
+import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///jobportal.db'
+
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret')
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///jobportal.db"
+)
+
 
 db.init_app(app)
 
@@ -59,17 +66,20 @@ def register():
 # Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    
     form = LoginForm()
     
-    if request.method == "POST":
-        user = User.query.filter_by(email=request.form['email']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and check_password_hash(user.password, form.password.data):
             login_user(user)
-            return redirect(url_for('dashboard'))
+            next_page = request.args.get('next')
+            
+            return redirect(next_page or url_for('dashboard'))
         else:
             flash("Invalid credentials")
 
-    return render_template("login.html")
+    return render_template("login.html",form=form)
 
 
 # Logout
