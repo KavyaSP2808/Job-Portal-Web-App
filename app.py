@@ -59,6 +59,8 @@ def register():
 # Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    form = LoginForm()
+    
     if request.method == "POST":
         user = User.query.filter_by(email=request.form['email']).first()
         if user and check_password_hash(user.password, request.form['password']):
