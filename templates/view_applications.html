@@ -25,18 +25,30 @@
                 </div>
 
                 {% if app.status == "Pending" %}
-                <div>
-                    <a href="{{ url_for('update_application', app_id=app.id, status='Selected') }}"
-                       class="btn btn-success btn-sm">
-                       Select
-                    </a>
+<div>
 
-                    <a href="{{ url_for('update_application', app_id=app.id, status='Rejected') }}"
-                       class="btn btn-danger btn-sm">
-                       Reject
-                    </a>
-                </div>
-                {% endif %}
+    <form action="{{ url_for('update_application', app_id=app.id) }}"
+          method="POST"
+          style="display:inline;">
+        <input type="hidden" name="status" value="Selected">
+        <button type="submit"
+                class="btn btn-success btn-sm">
+            Select
+        </button>
+    </form>
+
+    <form action="{{ url_for('update_application', app_id=app.id) }}"
+          method="POST"
+          style="display:inline;">
+        <input type="hidden" name="status" value="Rejected">
+        <button type="submit"
+                class="btn btn-danger btn-sm">
+            Reject
+        </button>
+    </form>
+
+</div>
+{% endif %}
 
             </div>
         </div>

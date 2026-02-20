@@ -7,13 +7,13 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-bold">Available Jobs</h2>
         <span class="text-muted">
-            {{ jobs|length }} Jobs Found
+            {{ jobs.total }} Jobs Found
         </span>
     </div>
 
-    {% if jobs %}
+    {% if jobs.items %}
 
-        {% for job in jobs %}
+        {% for job in jobs.items %}
         <div class="card mb-4 border-0 shadow-sm rounded-4 job-card">
             <div class="card-body p-4 d-flex flex-column justify-content-between">
 
@@ -24,24 +24,29 @@
                     <div class="d-flex justify-content-between align-items-start">
                         <h4 class="fw-bold mb-2">{{ job.title }}</h4>
 
-                        <!-- Category Top Right -->
                         <span class="badge bg-dark px-3 py-2">
                             {{ job.category }}
                         </span>
                     </div>
 
                     <!-- Company + Location + Salary -->
-                    <p class="text-muted mb-3">
-                        🏢 Tech Company Ltd • 
+                    <p class="text-muted mb-2">
+                        🏢 {{ job.employer.username }} • 
                         📍 {{ job.location }} • 
                         💰 {{ job.salary }}
                     </p>
+
+                    <!-- Posted Date -->
+                    <small class="text-muted">
+                        Posted on {{ job.created_at.strftime('%d %b %Y') }}
+                    </small>
 
                     <hr>
 
                     <!-- Description -->
                     <p class="text-muted mb-4">
-                        {{ job.description[:200] }}{% if job.description|length > 200 %}...{% endif %}
+                        {{ job.description[:200] }}
+                        {% if job.description|length > 200 %}...{% endif %}
                     </p>
 
                 </div>
@@ -50,7 +55,7 @@
                 <div class="d-flex justify-content-end">
 
                     {% if current_user.is_authenticated and current_user.role == "job_seeker" %}
-                        
+
                         {% set applied = false %}
                         {% for application in job.applications %}
                             {% if application.user_id == current_user.id %}
@@ -63,14 +68,15 @@
                                 ✅ Applied
                             </button>
                         {% else %}
-                            <a href="{{ url_for('apply', job_id=job.id) }}" 
-                               class="btn btn-primary px-4">
-                                 Apply Now
-                            </a>
+                            <form action="{{ url_for('apply', job_id=job.id) }}" method="POST">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    Apply Now
+                                </button>
+                            </form>
                         {% endif %}
 
                     {% else %}
-                        <a href="{{ url_for('login') }}" 
+                        <a href="{{ url_for('login', next=request.path) }}" 
                            class="btn btn-outline-primary px-4">
                             Apply
                         </a>
@@ -81,6 +87,49 @@
             </div>
         </div>
         {% endfor %}
+
+        <!-- ================= PAGINATION ================= -->
+        <nav>
+            <ul class="pagination justify-content-center mt-4">
+
+                {% if jobs.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('home', page=jobs.prev_num) }}">
+                            Previous
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% for page_num in jobs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                        {% if page_num == jobs.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('home', page=page_num) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if jobs.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('home', page=jobs.next_num) }}">
+                            Next
+                        </a>
+                    </li>
+                {% endif %}
+
+            </ul>
+        </nav>
 
     {% else %}
 

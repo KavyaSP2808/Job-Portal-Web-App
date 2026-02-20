@@ -1,20 +1,23 @@
 import os
-from flask import Flask, render_template, redirect, url_for, request, flash
+from dotenv import load_dotenv
+from flask import Flask, render_template, redirect, url_for, request, flash, abort
 from models import db, User, Job, Application
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from forms import RegisterForm, JobForm, LoginForm
 
+load_dotenv()
+
 app = Flask(__name__)
 
-# SECRET KEY
+# ==========================
+# CONFIGURATION
+# ==========================
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret')
-
-
-app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SECURE'] = False  # Change to True in production (HTTPS)
 app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
 
-# DATABASE CONFIG (Render Safe)
 database_url = os.environ.get("DATABASE_URL")
 
 if database_url:
@@ -28,10 +31,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
+# ==========================
+# LOGIN MANAGER
+# ==========================
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
-
 login_manager.session_protection = "strong"
 
 @login_manager.user_loader
@@ -41,21 +47,39 @@ def load_user(user_id):
 with app.app_context():
     db.create_all()
 
+# ==========================
+# ROUTES
+# ==========================
 
-# Home
 @app.route('/')
 def home():
-    jobs = Job.query.all()
+    page = request.args.get('page', 1, type=int)
+    jobs = Job.query.order_by(Job.created_at.desc()).paginate(page=page, per_page=5)
     return render_template("index.html", jobs=jobs)
 
 
-# Register
+# --------------------------
+# REGISTER
+# --------------------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegisterForm()
 
     if form.validate_on_submit():
-        hashed_password = generate_password_hash(form.password.data)
+
+        existing_user = User.query.filter(
+            (User.email == form.email.data) |
+            (User.username == form.username.data)
+        ).first()
+
+        if existing_user:
+            flash("User already exists with this email or username.")
+            return redirect(url_for("register"))
+
+        hashed_password = generate_password_hash(
+            form.password.data,
+            method='pbkdf2:sha256'
+        )
 
         user = User(
             username=form.username.data,
@@ -67,42 +91,36 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        flash("Registration successful!")
+        flash("Registration successful! Please login.")
         return redirect(url_for('login'))
 
     return render_template("register.html", form=form)
 
 
-
-# Login
+# --------------------------
+# LOGIN
+# --------------------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    
     form = LoginForm()
-    
+
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        
+
         if user and check_password_hash(user.password, form.password.data):
-            login_user(user, remember=True)
+            login_user(user)
+
             
-            next_page = request.args.get('next')
-            if next_page:
-                return redirect(next_page)
-
-            # Role-based redirect
-            if user.role == "employer":
-                return redirect(url_for('dashboard'))
-
-            elif user.role == "job_seeker":
-                return redirect(url_for('dashboard'))
+            return redirect(url_for('dashboard'))
 
         flash("Invalid credentials")
 
     return render_template("login.html", form=form)
 
 
-# Logout
+# --------------------------
+# LOGOUT
+# --------------------------
 @app.route('/logout')
 @login_required
 def logout():
@@ -110,58 +128,44 @@ def logout():
     return redirect(url_for('home'))
 
 
-# Dashboard
+# --------------------------
+# DASHBOARD
+# --------------------------
 @app.route('/dashboard')
 @login_required
 def dashboard():
 
-    # EMPLOYER DASHBOARD
     if current_user.role == "employer":
         jobs = Job.query.filter_by(employer_id=current_user.id).all()
-
-        total_jobs = len(jobs)
-        total_applications = sum(len(job.applications) for job in jobs)
 
         return render_template(
             "dashboard.html",
             role="employer",
-            jobs=jobs,
-            total_jobs=total_jobs,
-            total_applications=total_applications
+            jobs=jobs
         )
 
-    # JOB SEEKER DASHBOARD
     elif current_user.role == "job_seeker":
         applications = Application.query.filter_by(user_id=current_user.id).all()
-
-        total_applied = len(applications)
-        selected_count = len([app for app in applications if app.status == "Selected"])
-        rejected_count = len([app for app in applications if app.status == "Rejected"])
-        pending_count = len([app for app in applications if app.status == "Pending"])
 
         return render_template(
             "dashboard.html",
             role="job_seeker",
-            applications=applications,
-            total_applied=total_applied,
-            selected_count=selected_count,
-            rejected_count=rejected_count,
-            pending_count=pending_count
+            applications=applications
         )
 
-    # FALLBACK (just in case)
     flash("Invalid role.")
     return redirect(url_for("home"))
 
 
-
-# Post Job (Employer only)
+# --------------------------
+# POST JOB
+# --------------------------
 @app.route('/post-job', methods=['GET', 'POST'])
 @login_required
 def post_job():
+
     if current_user.role != "employer":
-        flash("Access denied")
-        return redirect(url_for('dashboard'))
+        abort(403)
 
     form = JobForm()
 
@@ -184,48 +188,18 @@ def post_job():
     return render_template("post_job.html", form=form)
 
 
-# Apply Job (Job Seeker only)
-@app.route('/apply/<int:job_id>')
-@login_required
-def apply(job_id):
-
-    # Only job seekers can apply
-    if current_user.role != "job_seeker":
-        flash("Only job seekers can apply for jobs.")
-        return redirect(url_for('home'))
-
-    # Check if already applied
-    existing_application = Application.query.filter_by(
-        job_id=job_id,
-        user_id=current_user.id
-    ).first()
-
-    if existing_application:
-        flash("You have already applied for this job.")
-        return redirect(url_for('home'))
-
-    # Create new application
-    new_application = Application(
-        job_id=job_id,
-        user_id=current_user.id
-    )
-
-    db.session.add(new_application)
-    db.session.commit()
-
-    flash("Application submitted successfully!")
-    return redirect(url_for('dashboard'))
-
+# --------------------------
+# EDIT JOB
+# --------------------------
 @app.route('/edit-job/<int:job_id>', methods=['GET', 'POST'])
 @login_required
 def edit_job(job_id):
 
     job = Job.query.get_or_404(job_id)
 
-    # Security: Only owner can edit
+    # Only job owner can edit
     if job.employer_id != current_user.id:
-        flash("Unauthorized access.")
-        return redirect(url_for('dashboard'))
+        abort(403)
 
     form = JobForm(obj=job)
 
@@ -237,22 +211,23 @@ def edit_job(job_id):
         job.category = form.category.data
 
         db.session.commit()
+
         flash("Job updated successfully!")
         return redirect(url_for('dashboard'))
 
-    return render_template('post_job.html', form=form)
+    return render_template("post_job.html", form=form)
 
-
+# --------------------------
+# DELETE JOB
+# --------------------------
 @app.route('/delete-job/<int:job_id>', methods=['POST'])
 @login_required
 def delete_job(job_id):
 
     job = Job.query.get_or_404(job_id)
 
-    # Security: Only owner can delete
     if job.employer_id != current_user.id:
-        flash("Unauthorized action.")
-        return redirect(url_for('dashboard'))
+        abort(403)
 
     db.session.delete(job)
     db.session.commit()
@@ -260,16 +235,19 @@ def delete_job(job_id):
     flash("Job deleted successfully!")
     return redirect(url_for('dashboard'))
 
-@app.route('/update-application/<int:app_id>/<string:status>')
+# --------------------------
+# UPDATE APPLICATION
+# --------------------------
+@app.route('/update-application/<int:app_id>', methods=['POST'])
 @login_required
-def update_application(app_id, status):
+def update_application(app_id):
 
     application = Application.query.get_or_404(app_id)
 
-    # Only employer who owns the job can update
     if application.job.employer_id != current_user.id:
-        flash("Unauthorized action.")
-        return redirect(url_for('dashboard'))
+        abort(403)
+
+    status = request.form.get("status")
 
     if status not in ["Selected", "Rejected"]:
         flash("Invalid status.")
@@ -281,6 +259,40 @@ def update_application(app_id, status):
     flash(f"Application {status} successfully!")
     return redirect(url_for('view_applications', job_id=application.job_id))
 
+
+# --------------------------
+# APPLY JOB (POST ONLY)
+# --------------------------
+@app.route('/apply/<int:job_id>', methods=['POST'])
+@login_required
+def apply(job_id):
+
+    if current_user.role != "job_seeker":
+        abort(403)
+
+    existing_application = Application.query.filter_by(
+        job_id=job_id,
+        user_id=current_user.id
+    ).first()
+
+    if existing_application:
+        flash("You have already applied for this job.")
+        return redirect(url_for('home'))
+
+    new_application = Application(
+        job_id=job_id,
+        user_id=current_user.id
+    )
+
+    db.session.add(new_application)
+    db.session.commit()
+
+    flash("Application submitted successfully!")
+    return redirect(url_for('dashboard'))
+
+# --------------------------
+# VIEW APPLICATIONS
+# --------------------------
 @app.route('/view-applications/<int:job_id>')
 @login_required
 def view_applications(job_id):
@@ -288,10 +300,9 @@ def view_applications(job_id):
     job = Job.query.get_or_404(job_id)
 
     if job.employer_id != current_user.id:
-        flash("Unauthorized access.")
-        return redirect(url_for('dashboard'))
-
-    applications = job.applications
+        abort(403)
+        
+    applications = job.applications    
 
     return render_template("view_applications.html", job=job, applications=applications)
 
