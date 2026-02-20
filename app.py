@@ -82,15 +82,24 @@ def login():
     
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
+        
         if user and check_password_hash(user.password, form.password.data):
             login_user(user, remember=True)
             
             next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        else:
-            flash("Invalid credentials")
+            if next_page:
+                return redirect(next_page)
 
-    return render_template("login.html",form=form)
+            # Role-based redirect
+            if user.role == "employer":
+                return redirect(url_for('dashboard'))
+
+            elif user.role == "job_seeker":
+                return redirect(url_for('dashboard'))
+
+        flash("Invalid credentials")
+
+    return render_template("login.html", form=form)
 
 
 # Logout
@@ -105,15 +114,44 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+
+    # EMPLOYER DASHBOARD
     if current_user.role == "employer":
         jobs = Job.query.filter_by(employer_id=current_user.id).all()
-        return render_template("dashboard.html", jobs=jobs)
 
+        total_jobs = len(jobs)
+        total_applications = sum(len(job.applications) for job in jobs)
+
+        return render_template(
+            "dashboard.html",
+            role="employer",
+            jobs=jobs,
+            total_jobs=total_jobs,
+            total_applications=total_applications
+        )
+
+    # JOB SEEKER DASHBOARD
     elif current_user.role == "job_seeker":
         applications = Application.query.filter_by(user_id=current_user.id).all()
-        return render_template("dashboard.html", applications=applications)
 
-    return render_template("dashboard.html")
+        total_applied = len(applications)
+        selected_count = len([app for app in applications if app.status == "Selected"])
+        rejected_count = len([app for app in applications if app.status == "Rejected"])
+        pending_count = len([app for app in applications if app.status == "Pending"])
+
+        return render_template(
+            "dashboard.html",
+            role="job_seeker",
+            applications=applications,
+            total_applied=total_applied,
+            selected_count=selected_count,
+            rejected_count=rejected_count,
+            pending_count=pending_count
+        )
+
+    # FALLBACK (just in case)
+    flash("Invalid role.")
+    return redirect(url_for("home"))
 
 
 
