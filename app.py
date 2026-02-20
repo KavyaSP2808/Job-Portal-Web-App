@@ -10,6 +10,10 @@ app = Flask(__name__)
 # SECRET KEY
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret')
 
+
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
+
 # DATABASE CONFIG (Render Safe)
 database_url = os.environ.get("DATABASE_URL")
 
@@ -27,6 +31,8 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+
+login_manager.session_protection = "strong"
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -77,7 +83,7 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and check_password_hash(user.password, form.password.data):
-            login_user(user)
+            login_user(user, remember=True)
             
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
