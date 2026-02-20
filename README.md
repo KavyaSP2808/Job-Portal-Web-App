@@ -3,7 +3,7 @@
 A Flask-based Job Portal with role-based authentication.
 
 ## Live Demo
-🔗 Live Web App:(https://job-portal-web-kuhv.onrender.com)
+🔗 Live Web App:(https://job-portal-web-app-2-b9yi.onrender.com)
 ## Features
 - User registration & login
 - Employer job posting
