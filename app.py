@@ -136,7 +136,7 @@ def logout():
 def dashboard():
 
     if current_user.role == "employer":
-        jobs = Job.query.filter_by(employer_id=current_user.id).all()
+        jobs = current_user.jobs
 
         return render_template(
             "dashboard.html",
@@ -145,7 +145,7 @@ def dashboard():
         )
 
     elif current_user.role == "job_seeker":
-        applications = Application.query.filter_by(user_id=current_user.id).all()
+        applications = current_user.applications
 
         return render_template(
             "dashboard.html",
